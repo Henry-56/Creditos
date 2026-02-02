@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ApplicantData, AssessmentResult, RiskLevel } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Moved initialization inside the function to prevent app crash on load if key is missing
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -21,6 +21,34 @@ const responseSchema = {
 
 export const calculateAIRisk = async (data: ApplicantData): Promise<AssessmentResult> => {
   const startTime = performance.now();
+  const apiKey = process.env.API_KEY;
+
+  // 1. Check if API Key exists. If not, return Mock Data so UI works.
+  if (!apiKey) {
+    console.warn("API_KEY not found. Running in Demo Mode.");
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+
+    // Simple mock logic to generate semi-realistic results based on input
+    const isRisky = data.monthlyDebt / data.monthlyIncome > 0.4 || data.creditHistoryScore < 600;
+    
+    return {
+      method: 'AI',
+      score: isRisky ? 55 : 88,
+      riskLevel: isRisky ? RiskLevel.HIGH : RiskLevel.LOW,
+      recommendedInterestRate: isRisky ? 18.5 : 10.5,
+      maxApprovedAmount: isRisky ? 5000 : data.monthlyIncome * 5,
+      reasoning: [
+        "MODO DEMO: No se detectó API Key configurada.",
+        isRisky ? "Simulación: Riesgo elevado por carga de deuda." : "Simulación: Perfil sólido y bajo riesgo.",
+        "Para activar la IA real, configure la variable API_KEY."
+      ],
+      processingTimeMs: Math.round(performance.now() - startTime),
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  // 2. Initialize AI only when needed and key is present
+  const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `
     Actúa como un analista de riesgo de crédito senior en un banco importante.
@@ -80,7 +108,7 @@ export const calculateAIRisk = async (data: ApplicantData): Promise<AssessmentRe
       riskLevel: RiskLevel.CRITICAL,
       recommendedInterestRate: 0,
       maxApprovedAmount: 0,
-      reasoning: ["Error al conectar con el servicio de IA. Por favor intente nuevamente."],
+      reasoning: ["Error al conectar con el servicio de IA. Por favor verifique su conexión o API Key."],
       processingTimeMs: Math.round(performance.now() - startTime),
       timestamp: new Date().toISOString()
     };
